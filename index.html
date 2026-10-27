@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>學校開放日 - 電腦硬件 AR 互動展覽</title>
+  <!-- 1. 引入 A-Frame 核心庫 (v1.4.2 兼具穩定性與 MindAR 相容性) -->
+  <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+  <!-- 2. 引入 MindAR Image Tracking A-Frame 插件 (v1.2.2) -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+  <!-- 3. 引入 A-Frame Extras (支援 glTF 動畫播放 animation-mixer) -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  <style>
+    /* 重設頁面基礎樣式，確保 AR 畫面滿版且無法滑動 */
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* 頂部標題列 (提升開放日展示質感) */
+    .top-bar {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #f8fafc;
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      pointer-events: none;
+      white-space: nowrap;
+    /* 底部響應式文字資訊浮動視窗 (UI Overlay) */
+    .ar-ui-overlay {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 36px);
+      max-width: 520px;
+      background: rgba(15, 23, 42, 0.85); /* 半透明暗色背景 */
+      backdrop-filter: blur(12px);          /* 現代毛玻璃模糊特效 */
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      padding: 16px 20px;
+      color: #ffffff;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      z-index: 1000;                       /* 確保浮於 A-Frame 畫布之上 */
+      transition: all 0.25s ease-out;
+      pointer-events: none;                /* 避免阻擋手機觸控對焦 */
+    /* 狀態提示小標籤 (預設狀態 vs 偵測成功狀態) */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      margin-bottom: 8px;
+      border: 1px solid rgba(56, 189, 248, 0.4);
+    /* 呼吸燈小圓點 */
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      background-color: #38bdf8;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    /* 硬件名稱與描述文字排版 */
+    .info-content {
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: #e2e8f0;
+      letter-spacing: 0.3px;
+    /* 高亮硬件標題 */
+    .info-content strong {
+      color: #38bdf8;
+      font-weight: 700;
+      font-size: 15.5px;
+      display: inline;
+    /* 當識別到物體時視窗的微光反饋 */
+    .ar-ui-overlay.detected {
+      border-color: rgba(56, 189, 248, 0.6);
+      box-shadow: 0 8px 32px rgba(56, 189, 248, 0.25);
+    .ar-ui-overlay.detected .status-badge {
+      background: rgba(74, 222, 128, 0.2);
+      color: #4ade80;
+      border-color: rgba(74, 222, 128, 0.4);
+    .ar-ui-overlay.detected .pulse-dot {
+      background-color: #4ade80;
+  </style>
+</head>
+<body>
+  <!-- 頂部常駐展覽標題 -->
+  <div class="top-bar">💻 電腦硬件 AR 探索台</div>
+  <!-- 底部響應式資訊浮動視窗 -->
+  <div class="ar-ui-overlay" id="uiOverlay">
+    <div class="status-badge" id="statusBadge">
+      <span class="pulse-dot"></span>
+      <span id="badgeText">AR 掃描中</span>
+    </div>
+    <div class="info-content" id="infoText">
+      ✨ 請將相機對準展板上的硬件圖片...
+    </div>
+  </div>
+    A-Frame AR 場景配置：
+    - imageTargetSrc: 指向編譯好的 targets.mind
+    - filterMinCF / filterBeta: 調平抖動濾波器，讓 3D 模型在相機前更穩定不發抖
+    - maxTrack: 同時追蹤的目標數 (預設設為 1，節省移動設備效能)
+  <a-scene 
+    mindar-image="imageTargetSrc: ./targets.mind; filterMinCF: 0.001; filterBeta: 0.01; maxTrack: 1;" 
+    color-space="sRGB" 
+    renderer="colorManagement: true, physicallyCorrectLights: true" 
+    vr-mode-ui="enabled: false" 
+    device-orientation-permission-ui="enabled: false">
+    <!-- 資產預載區 (Asset Management) -->
+    <a-assets timeout="10000">
+      <a-asset-item id="model-cpu" src="cpu.glb"></a-asset-item>
+      <a-asset-item id="model-gpu" src="gpu.glb"></a-asset-item>
+      <a-asset-item id="model-psu" src="psu.glb"></a-asset-item>
+      <a-asset-item id="model-hdd" src="hdd.glb"></a-asset-item>
+      <a-asset-item id="model-ssd" src="ssd.glb"></a-asset-item>
+      <a-asset-item id="model-ram" src="ram.glb"></a-asset-item>
+      <a-asset-item id="model-motherboard" src="motherboard.glb"></a-asset-item>
+    </a-assets>
+    <!-- AR 相機實體 -->
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <!-- 環境打光：確保 glTF 3D 模型的金屬材質與質感能真實反射 -->
+    <a-entity light="type: ambient; color: #ffffff; intensity: 1.2;"></a-entity>
+    <a-entity light="type: directional; color: #ffffff; intensity: 1.5; position: 1 2 1;"></a-entity>
+    <!-- ==================== 7 個 AR 識別錨點與對應 3D 模型 ==================== -->
+    <!-- 目標 0: CPU (中央處理器) -->
+    <a-entity mindar-image-target="targetIndex: 0" class="hardware-target" data-key="cpu">
+      <a-gltf-model src="#model-cpu" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+    <!-- 目標 1: GPU (顯示卡) -->
+    <a-entity mindar-image-target="targetIndex: 1" class="hardware-target" data-key="gpu">
+      <a-gltf-model src="#model-gpu" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+    <!-- 目標 2: PSU (電源供應器) -->
+    <a-entity mindar-image-target="targetIndex: 2" class="hardware-target" data-key="psu">
+      <a-gltf-model src="#model-psu" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+    <!-- 目標 3: HDD (傳統硬碟) -->
+    <a-entity mindar-image-target="targetIndex: 3" class="hardware-target" data-key="hdd">
+      <a-gltf-model src="#model-hdd" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+    <!-- 目標 4: SSD (固態硬碟) - 內置數據傳輸光效動畫，掛載 animation-mixer 自動循環播放 -->
+    <a-entity mindar-image-target="targetIndex: 4" class="hardware-target" data-key="ssd">
+      <a-gltf-model 
+        src="#model-ssd" 
+        position="0 0 0" 
+        rotation="0 0 0" 
+        scale="0.25 0.25 0.25"
+        animation-mixer="clip: *; loop: repeat; crossFadeDuration: 0.3;">
+      </a-gltf-model>
+    </a-entity>
+    <!-- 目標 5: RAM (隨機存取記憶體) -->
+    <a-entity mindar-image-target="targetIndex: 5" class="hardware-target" data-key="ram">
+      <a-gltf-model src="#model-ram" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+    <!-- 目標 6: Motherboard (主機板) -->
+    <a-entity mindar-image-target="targetIndex: 6" class="hardware-target" data-key="motherboard">
+      <a-gltf-model src="#model-motherboard" position="0 0 0" rotation="0 0 0" scale="0.25 0.25 0.25"></a-gltf-model>
+    </a-entity>
+  </a-scene>
+  <!-- ==================== 互動邏輯 JavaScript ==================== -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      // 1. 各硬件專屬的解說資料字典
+      const hardwareData = {
+        cpu: {
+          title: "中央處理器 (CPU)",
+          desc: "電腦的大腦，負責執行程式指令與運算所有核心數據。"
+        gpu: {
+          title: "顯示卡 (GPU)",
+          desc: "圖形運算核心，負責渲染精美畫面、3D 遊戲及加速 AI 運算。"
+        psu: {
+          title: "電源供應器 (PSU)",
+          desc: "電腦的心臟，將家用交流電轉換為穩定的直流電，供電給全機運作。"
+        hdd: {
+          title: "傳統硬碟 (HDD)",
+          desc: "高容量儲存裝置，利用磁性盤片記錄數據，適合儲存大量非即時讀取的檔案。"
+        ssd: {
+          title: "固態硬碟 (SSD)",
+          desc: "高速儲存裝置，採用快閃記憶體技術，能秒速啟動系統與載入遊戲。"
+        ram: {
+          title: "隨機存取記憶體 (RAM)",
+          desc: "臨時工作台，暫存 CPU 運算中的數據，容量越大越能流暢進行多任務切換。"
+        motherboard: {
+          title: "主機板 (Motherboard)",
+          desc: "電腦的骨幹與橋樑，佈滿精密電路，負責連接並協調所有硬件運作。"
+      // 預設提示文字常數
+      const DEFAULT_TEXT = "✨ 請將相機對準展板上的硬件圖片...";
+      // DOM 元素引用
+      const uiOverlay = document.getElementById("uiOverlay");
+      const infoText = document.getElementById("infoText");
+      const badgeText = document.getElementById("badgeText");
+      // 取得所有 target 實體
+      const targets = document.querySelectorAll(".hardware-target");
+      // 2. 遍歷並監聽每個 target 的識別事件
+      targets.forEach((target) => {
+        const key = target.getAttribute("data-key");
+        const data = hardwareData[key];
+        // 當相機辨識到該圖片 (targetFound)
+        target.addEventListener("targetFound", () => {
+          if (!data) return;
+          // 更新文字內容（加粗標題與描述）
+          infoText.innerHTML = `<strong>【${data.title}】</strong>${data.desc}`;
+          badgeText.textContent = "已識別硬件";
+          // 切換高亮與狀態樣式
+          uiOverlay.classList.add("detected");
+        // 當相機移開或丟失目標時 (targetLost)
+        target.addEventListener("targetLost", () => {
+          // 恢復預設文字
+          infoText.textContent = DEFAULT_TEXT;
+          badgeText.textContent = "AR 掃描中";
+          // 移除高亮樣式
+          uiOverlay.classList.remove("detected");
+  </script>
+</body>
+</html>
