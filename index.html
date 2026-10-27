@@ -32,8 +32,8 @@
 
     #ui-overlay {
       position: absolute;
-      /* 將位置從 30px 改為 15%，使其位於畫面中下方，避開手機瀏覽器工具列 */
-      bottom: 15%; 
+      /* 將位置從 30px 改為 20%，使其位於畫面中下方，避開手機瀏覽器工具列 */
+      bottom: 20%; 
       left: 50%;
       transform: translateX(-50%);
       width: 90%;
@@ -103,7 +103,7 @@
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 1" class="ar-target" data-index="1">
-      <a-gltf-model id="model-1" src="#gpu-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.2 0.2 0.2"></a-gltf-model>
+      <a-gltf-model id="model-1" src="#gpu-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.002 0.002 0.002"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 2" class="ar-target" data-index="2">
@@ -119,7 +119,7 @@
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 5" class="ar-target" data-index="5">
-      <a-gltf-model id="model-5" src="#ram-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.2 0.2 0.2"></a-gltf-model>
+      <a-gltf-model id="model-5" src="#ram-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.002 0.002 0.002"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 6" class="ar-target" data-index="6">
@@ -226,7 +226,7 @@
           const newScaleX = currentScale.x * pinchRatio;
 
           // 將極限放寬：最小可縮至 0.005，最大維持 15.0
-          if (newScaleX > 0.005 && newScaleX < 15.0) {
+          if (newScaleX > 0.0005 && newScaleX < 15.0) {
             activeModel.setAttribute('scale', {
               x: newScaleX,
               y: currentScale.y * pinchRatio,
