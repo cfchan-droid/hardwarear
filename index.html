@@ -32,7 +32,8 @@
 
     #ui-overlay {
       position: absolute;
-      bottom: 30px;
+      /* 將位置從 30px 改為 15%，使其位於畫面中下方，避開手機瀏覽器工具列 */
+      bottom: 15%; 
       left: 50%;
       transform: translateX(-50%);
       width: 90%;
@@ -96,33 +97,33 @@
 
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- 硬件模型綁定區 -->
+    <!-- 加入 data-initial-scale 屬性，方便 JS 讀取並重置，GPU 與 RAM 預設縮小至 0.2 -->
     <a-entity mindar-image-target="targetIndex: 0" class="ar-target" data-index="0">
-      <a-gltf-model id="model-0" src="#cpu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-0" src="#cpu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" data-initial-scale="0.5 0.5 0.5"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 1" class="ar-target" data-index="1">
-      <a-gltf-model id="model-1" src="#gpu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-1" src="#gpu-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.2 0.2 0.2"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 2" class="ar-target" data-index="2">
-      <a-gltf-model id="model-2" src="#psu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-2" src="#psu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" data-initial-scale="0.5 0.5 0.5"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 3" class="ar-target" data-index="3">
-      <a-gltf-model id="model-3" src="#hdd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-3" src="#hdd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" data-initial-scale="0.5 0.5 0.5"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 4" class="ar-target" data-index="4">
-      <a-gltf-model id="model-4" src="#ssd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" animation-mixer></a-gltf-model>
+      <a-gltf-model id="model-4" src="#ssd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" animation-mixer data-initial-scale="0.5 0.5 0.5"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 5" class="ar-target" data-index="5">
-      <a-gltf-model id="model-5" src="#ram-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-5" src="#ram-asset" position="0 0 0" scale="0.2 0.2 0.2" rotation="0 0 0" data-initial-scale="0.2 0.2 0.2"></a-gltf-model>
     </a-entity>
 
     <a-entity mindar-image-target="targetIndex: 6" class="ar-target" data-index="6">
-      <a-gltf-model id="model-6" src="#mb-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-6" src="#mb-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" data-initial-scale="0.5 0.5 0.5"></a-gltf-model>
     </a-entity>
   </a-scene>
 
@@ -164,8 +165,12 @@
             gestureHint.style.display = "none";
             
             if (activeModel) {
+                // 恢復旋轉為初始值
                 activeModel.setAttribute('rotation', '0 0 0');
-                activeModel.setAttribute('scale', '0.5 0.5 0.5'); 
+                
+                // 動態讀取該模型專屬的初始大小，如果沒有設定則預設為 0.5 0.5 0.5
+                const initialScale = activeModel.getAttribute('data-initial-scale') || '0.5 0.5 0.5';
+                activeModel.setAttribute('scale', initialScale); 
             }
             
             activeTargetIndex = null;
@@ -202,8 +207,6 @@
 
           const currentRot = activeModel.getAttribute('rotation');
           
-          // 修正：將 deltaY 的加號改為減號 (-)，讓上下滑動的直覺跟隨手指方向。
-          // 如果你覺得左右滑動 (deltaX) 也是反的，可以把下面的 + 改成 -。
           activeModel.setAttribute('rotation', {
             x: currentRot.x - deltaY * 0.5, 
             y: currentRot.y + deltaX * 0.5,
@@ -222,8 +225,8 @@
           const currentScale = activeModel.getAttribute('scale');
           const newScaleX = currentScale.x * pinchRatio;
 
-          // 修正：將最大縮放限制從 3.0 大幅放寬到 15.0，最小維持在 0.05
-          if (newScaleX > 0.05 && newScaleX < 15.0) {
+          // 將極限放寬：最小可縮至 0.005，最大維持 15.0
+          if (newScaleX > 0.005 && newScaleX < 15.0) {
             activeModel.setAttribute('scale', {
               x: newScaleX,
               y: currentScale.y * pinchRatio,
