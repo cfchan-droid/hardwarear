@@ -2,27 +2,28 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>電腦硬件 WebAR 展示</title>
 
-  <!-- 引入 A-Frame 框架 (1.3.0 與 MindAR 1.2.x 兼容性最佳) -->
+  <!-- 引入 A-Frame 框架 -->
   <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
   
-  <!-- 引入 MindAR 影像追蹤庫 (1.2.x) -->
+  <!-- 引入 MindAR 影像追蹤庫 -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
   
-  <!-- 引入 A-Frame Extras (提供 animation-mixer 以播放 3D 模型內置動畫) -->
+  <!-- 引入 A-Frame Extras (用於播放動畫) -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 
   <style>
-    /* 清除預設邊距並確保全螢幕顯示 */
+    /* 清除預設邊距並確保全螢幕顯示，防止手勢觸發瀏覽器捲動或重整 */
     body {
       margin: 0;
       overflow: hidden;
       font-family: 'PingFang SC', 'Microsoft JhengHei', sans-serif;
+      touch-action: none; /* 禁用瀏覽器預設手勢 (如下拉更新) */
     }
 
-    /* 響應式文字 UI 浮動視窗的樣式設計 */
+    /* 響應式文字 UI 浮動視窗 */
     #ui-overlay {
       position: absolute;
       bottom: 30px;
@@ -30,17 +31,17 @@
       transform: translateX(-50%);
       width: 90%;
       max-width: 500px;
-      background: rgba(20, 20, 20, 0.85); /* 半透明黑色背景 */
+      background: rgba(20, 20, 20, 0.85);
       color: #ffffff;
       padding: 15px 20px;
       border-radius: 12px;
       text-align: center;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      z-index: 1000; /* 確保 UI 在 3D 場景的最上層 */
+      z-index: 1000;
       box-sizing: border-box;
-      pointer-events: none; /* 避免擋住畫面的點擊操作 */
+      pointer-events: none; /* 讓手勢可以穿透文字方塊作用於螢幕 */
       transition: all 0.3s ease-in-out;
-      backdrop-filter: blur(4px); /* 現代感毛玻璃特效 */
+      backdrop-filter: blur(4px);
     }
 
     .ui-title {
@@ -54,18 +55,25 @@
       font-size: 0.95rem;
       line-height: 1.5;
     }
+
+    /* 提示文字樣式 */
+    .gesture-hint {
+      font-size: 0.8rem;
+      color: #FFD700;
+      margin-top: 8px;
+      display: none; /* 預設隱藏，找到目標時才顯示 */
+    }
   </style>
 </head>
 <body>
 
-  <!-- 響應式文字 UI 浮動視窗 -->
+  <!-- UI 浮動視窗 -->
   <div id="ui-overlay">
     <div class="ui-desc" id="info-text">✨ 請將相機對準展板上的硬件圖片...</div>
+    <div class="gesture-hint" id="gesture-hint">👆 提示：單指滑動可旋轉，雙指捏合可縮放</div>
   </div>
 
   <!-- A-Frame 場景設定 -->
-  <!-- imageTargetSrc 指向你編譯好的辨識檔 targets.mind -->
-  <!-- maxTrack: 1 表示同一時間只追蹤並顯示一個模型，提升效能 -->
   <a-scene 
     mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; autoStart: true;" 
     color-space="sRGB" 
@@ -73,66 +81,57 @@
     vr-mode-ui="enabled: false" 
     device-orientation-permission-ui="enabled: false">
     
-    <!-- 資源預載區：在這裡載入 7 個 3D 模型檔案 -->
     <a-assets>
-      <a-asset-item id="cpu-model" src="./cpu.glb"></a-asset-item>
-      <a-asset-item id="gpu-model" src="./gpu.glb"></a-asset-item>
-      <a-asset-item id="psu-model" src="./psu.glb"></a-asset-item>
-      <a-asset-item id="hdd-model" src="./hdd.glb"></a-asset-item>
-      <a-asset-item id="ssd-model" src="./ssd.glb"></a-asset-item>
-      <a-asset-item id="ram-model" src="./ram.glb"></a-asset-item>
-      <a-asset-item id="mb-model" src="./motherboard.glb"></a-asset-item>
+      <a-asset-item id="cpu-asset" src="./cpu.glb"></a-asset-item>
+      <a-asset-item id="gpu-asset" src="./gpu.glb"></a-asset-item>
+      <a-asset-item id="psu-asset" src="./psu.glb"></a-asset-item>
+      <a-asset-item id="hdd-asset" src="./hdd.glb"></a-asset-item>
+      <a-asset-item id="ssd-asset" src="./ssd.glb"></a-asset-item>
+      <a-asset-item id="ram-asset" src="./ram.glb"></a-asset-item>
+      <a-asset-item id="mb-asset" src="./motherboard.glb"></a-asset-item>
     </a-assets>
 
-    <!-- AR 相機 -->
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-    <!-- Target 0: CPU -->
-    <!-- data-index 用於在 JavaScript 中識別是哪個硬體 -->
+    <!-- 注意：這裡我為每個 <a-gltf-model> 加上了 id (model-0, model-1...)，方便 JS 精準控制 -->
+    
     <a-entity mindar-image-target="targetIndex: 0" class="ar-target" data-index="0">
-      <!-- 提示：scale、position 與 rotation 可根據你模型的實際大小自行微調 -->
-      <a-gltf-model src="#cpu-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-0" src="#cpu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
-    <!-- Target 1: GPU -->
     <a-entity mindar-image-target="targetIndex: 1" class="ar-target" data-index="1">
-      <a-gltf-model src="#gpu-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-1" src="#gpu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
-    <!-- Target 2: PSU -->
     <a-entity mindar-image-target="targetIndex: 2" class="ar-target" data-index="2">
-      <a-gltf-model src="#psu-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-2" src="#psu-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
-    <!-- Target 3: HDD -->
     <a-entity mindar-image-target="targetIndex: 3" class="ar-target" data-index="3">
-      <a-gltf-model src="#hdd-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-3" src="#hdd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
-    <!-- Target 4: SSD (帶有動畫，必須加入 animation-mixer 屬性) -->
+    <!-- SSD 動畫維持 animation-mixer -->
     <a-entity mindar-image-target="targetIndex: 4" class="ar-target" data-index="4">
-      <a-gltf-model src="#ssd-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" animation-mixer></a-gltf-model>
+      <a-gltf-model id="model-4" src="#ssd-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0" animation-mixer></a-gltf-model>
     </a-entity>
 
-    <!-- Target 5: RAM -->
     <a-entity mindar-image-target="targetIndex: 5" class="ar-target" data-index="5">
-      <a-gltf-model src="#ram-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-5" src="#ram-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
-    <!-- Target 6: Motherboard -->
     <a-entity mindar-image-target="targetIndex: 6" class="ar-target" data-index="6">
-      <a-gltf-model src="#mb-model" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
+      <a-gltf-model id="model-6" src="#mb-asset" position="0 0 0" scale="0.5 0.5 0.5" rotation="0 0 0"></a-gltf-model>
     </a-entity>
 
   </a-scene>
 
-  <!-- 業務邏輯：處理文字更新 -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       const uiText = document.getElementById("info-text");
+      const gestureHint = document.getElementById("gesture-hint");
       const defaultText = "✨ 請將相機對準展板上的硬件圖片...";
 
-      // 建立硬件資訊字典，使用 data-index 作為鍵值
       const hardwareInfo = {
         "0": "<span class='ui-title'>【中央處理器 (CPU)】</span><br>電腦的大腦，負責執行程式指令與運算所有核心數據。",
         "1": "<span class='ui-title'>【顯示卡 (GPU)】</span><br>圖形運算核心，負責渲染精美畫面、3D 遊戲及加速 AI 運算。",
@@ -143,30 +142,97 @@
         "6": "<span class='ui-title'>【主機板 (Motherboard)】</span><br>電腦的骨幹與橋樑，佈滿精密電路，負責連接並協調所有硬件運作。"
       };
 
-      // 用來記錄當前正在顯示的硬體目標
-      let activeTarget = null;
+      let activeTargetIndex = null;
+      let activeModel = null; // 紀錄當前正在顯示的 3D 模型物件
 
-      // 取得所有的追蹤目標實體
       const targets = document.querySelectorAll('.ar-target');
 
       targets.forEach((target) => {
-        // 監聽：當攝影機辨識到對應圖片時 (targetFound)
         target.addEventListener("targetFound", event => {
           const index = target.getAttribute("data-index");
-          activeTarget = index;
-          // 更新 UI 內容 (使用 innerHTML 支援 span 標籤樣式)
+          activeTargetIndex = index;
+          
+          // 抓取內部的 a-gltf-model 元件以便後續手勢控制
+          activeModel = document.getElementById(`model-${index}`);
+          
           uiText.innerHTML = hardwareInfo[index];
+          gestureHint.style.display = "block"; // 顯示手勢提示
         });
 
-        // 監聽：當攝影機移開，失去追蹤時 (targetLost)
         target.addEventListener("targetLost", event => {
           const index = target.getAttribute("data-index");
-          // 為了避免快速切換目標時閃爍，只有當失去追蹤的目標是當前顯示的目標時，才恢復預設文字
-          if (activeTarget === index) {
+          if (activeTargetIndex === index) {
             uiText.innerHTML = defaultText;
-            activeTarget = null;
+            gestureHint.style.display = "none"; // 隱藏手勢提示
+            activeTargetIndex = null;
+            activeModel = null;
           }
         });
+      });
+
+      // ==========================================
+      // 手勢控制邏輯 (全螢幕監聽，控制 activeModel)
+      // ==========================================
+      let previousTouchPoint = null;
+      let previousPinchDistance = null;
+
+      // 當手指碰到螢幕
+      window.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          // 單指：記錄初始位置
+          previousTouchPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.touches.length === 2) {
+          // 雙指：計算兩指距離
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          previousPinchDistance = Math.hypot(dx, dy);
+        }
+      }, { passive: false });
+
+      // 當手指在螢幕上滑動
+      window.addEventListener('touchmove', (e) => {
+        // 如果沒有顯示模型，就不處理手勢
+        if (!activeModel) return;
+
+        // 阻止預設行為 (避免畫面跟著亂滑動)
+        e.preventDefault(); 
+
+        if (e.touches.length === 1 && previousTouchPoint) {
+          // --- 單指旋轉 ---
+          const touch = e.touches[0];
+          const deltaX = touch.clientX - previousTouchPoint.x;
+          const deltaY = touch.clientY - previousTouchPoint.y;
+
+          // Three.js 的 rotation 是以弧度為單位
+          activeModel.object3D.rotation.y += deltaX * 0.01; // 左右滑動控制 Y 軸旋轉
+          activeModel.object3D.rotation.x += deltaY * 0.01; // 上下滑動控制 X 軸旋轉
+
+          previousTouchPoint = { x: touch.clientX, y: touch.clientY };
+
+        } else if (e.touches.length === 2 && previousPinchDistance) {
+          // --- 雙指縮放 ---
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const currentPinchDistance = Math.hypot(dx, dy);
+
+          // 計算縮放比例
+          const pinchRatio = currentPinchDistance / previousPinchDistance;
+          const currentScale = activeModel.object3D.scale.x; 
+          const newScale = currentScale * pinchRatio;
+
+          // 限制縮放範圍 (避免縮太小不見或放太大穿模)
+          if (newScale > 0.1 && newScale < 3.0) {
+            activeModel.object3D.scale.set(newScale, newScale, newScale);
+          }
+
+          previousPinchDistance = currentPinchDistance;
+        }
+      }, { passive: false });
+
+      // 當手指離開螢幕
+      window.addEventListener('touchend', (e) => {
+        if (e.touches.length < 2) previousPinchDistance = null;
+        if (e.touches.length === 0) previousTouchPoint = null;
       });
     });
   </script>
