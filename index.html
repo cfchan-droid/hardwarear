@@ -22,11 +22,10 @@
       overflow: hidden;
       width: 100vw;
       height: 100vh;
-      touch-action: none; /* 關鍵：禁止瀏覽器原生手勢干擾 */
+      touch-action: none;
       font-family: 'PingFang SC', 'Microsoft JhengHei', sans-serif;
     }
     
-    /* 確保 AR 畫布不會攔截或阻擋手勢 */
     canvas {
       touch-action: none;
     }
@@ -46,7 +45,7 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       z-index: 1000;
       box-sizing: border-box;
-      pointer-events: none; /* 讓手勢穿透 UI 作用於背景 */
+      pointer-events: none;
       transition: all 0.3s ease-in-out;
       backdrop-filter: blur(4px);
     }
@@ -78,11 +77,6 @@
     <div class="gesture-hint" id="gesture-hint">👆 單指滑動轉動 ｜ 雙指捏合縮放</div>
   </div>
 
-  <!-- 
-    優化抖動的關鍵：加入 filterMinCF 與 filterBeta
-    filterMinCF: 數值越小，模型靜止時越穩定 (不會抖)，但移動時可能稍微有延遲感。
-    filterBeta: 數值越小，移動時的平滑過渡越強。
-  -->
   <a-scene 
     mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 1; autoStart: true; filterMinCF: 0.0005; filterBeta: 0.01;" 
     color-space="sRGB" 
@@ -169,10 +163,9 @@
             uiText.innerHTML = defaultText;
             gestureHint.style.display = "none";
             
-            // 可選：當遺失追蹤時，將模型轉正回預設狀態
             if (activeModel) {
                 activeModel.setAttribute('rotation', '0 0 0');
-                activeModel.setAttribute('scale', '0.5 0.5 0.5'); // 請與你 HTML 設定的初始 scale 保持一致
+                activeModel.setAttribute('scale', '0.5 0.5 0.5'); 
             }
             
             activeTargetIndex = null;
@@ -182,12 +175,11 @@
       });
 
       // ==========================================
-      // 手勢控制邏輯 (改用 A-Frame 原生 API 操作)
+      // 手勢控制邏輯 
       // ==========================================
       let previousTouchPoint = null;
       let previousPinchDistance = null;
 
-      // 綁定在 document 上，確保能攔截到手機上的所有觸控
       document.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1) {
           previousTouchPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -199,10 +191,7 @@
       }, { passive: false });
 
       document.addEventListener('touchmove', (e) => {
-        // 如果沒有偵測到模型，讓使用者可以正常操作手機
         if (!activeModel) return;
-
-        // 若有模型在畫面上，阻止預設行為 (避免畫面上下滑動)
         e.preventDefault(); 
 
         if (e.touches.length === 1 && previousTouchPoint) {
@@ -211,12 +200,12 @@
           const deltaX = touch.clientX - previousTouchPoint.x;
           const deltaY = touch.clientY - previousTouchPoint.y;
 
-          // 獲取當前旋轉角度 (單位：度數)
           const currentRot = activeModel.getAttribute('rotation');
           
-          // 更新旋轉角度 (乘上 0.5 來降低旋轉靈敏度)
+          // 修正：將 deltaY 的加號改為減號 (-)，讓上下滑動的直覺跟隨手指方向。
+          // 如果你覺得左右滑動 (deltaX) 也是反的，可以把下面的 + 改成 -。
           activeModel.setAttribute('rotation', {
-            x: currentRot.x + deltaY * 0.5,
+            x: currentRot.x - deltaY * 0.5, 
             y: currentRot.y + deltaX * 0.5,
             z: currentRot.z
           });
@@ -230,13 +219,11 @@
           const currentPinchDistance = Math.hypot(dx, dy);
 
           const pinchRatio = currentPinchDistance / previousPinchDistance;
-          
-          // 獲取當前縮放比例
           const currentScale = activeModel.getAttribute('scale');
           const newScaleX = currentScale.x * pinchRatio;
 
-          // 限制縮放範圍，防止縮到看不見或放太大
-          if (newScaleX > 0.05 && newScaleX < 3.0) {
+          // 修正：將最大縮放限制從 3.0 大幅放寬到 15.0，最小維持在 0.05
+          if (newScaleX > 0.05 && newScaleX < 15.0) {
             activeModel.setAttribute('scale', {
               x: newScaleX,
               y: currentScale.y * pinchRatio,
