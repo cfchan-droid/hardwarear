@@ -2,246 +2,204 @@
 <html lang="zh-HK">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>學校開放日 - 電腦硬件 WebAR 體驗</title>
-  <!-- 引入 A-Frame (建議使用穩定的 1.4.2) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>學校開放日 - 電腦硬件 AR 展覽 (除錯診斷版)</title>
+  <!-- 1. 核心依賴庫 -->
   <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-  <!-- 引入 MindAR 影像追蹤 A-Frame 版 (v1.2.5) -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-  <!-- 引入 aframe-extras (用於播放 SSD 內置模型動畫) -->
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
   <style>
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      user-select: none;
-      -webkit-user-select: none;
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Microsoft JhengHei", sans-serif;
-      background-color: #000;
-    /* 確保 AR 畫布在底層 */
-    a-scene {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-    /* 頂層 UI 容器：必須設置 pointer-events: none，避免阻擋相機點擊 */
-    #ui-container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    /* 遮罩引導層 */
+    #start-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(13, 17, 23, 0.95);
       z-index: 99999;
-      pointer-events: none;
-    /* 底部資訊卡片 */
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px; color: #fff; text-align: center;
+    #start-overlay h1 { font-size: 1.5rem; margin-bottom: 8px; color: #58a6ff; }
+    #start-overlay p { font-size: 0.9rem; color: #8b949e; margin-bottom: 20px; }
+    /* 按鈕樣式 */
+    .btn {
+      width: 100%; max-width: 320px; padding: 14px 20px; font-size: 1rem; font-weight: bold;
+      border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+    #start-btn { background: #21262d; color: #8b949e; cursor: not-allowed; }
+    #start-btn.ready { background: #238636; color: #fff; cursor: pointer; box-shadow: 0 4px 14px rgba(35, 134, 54, 0.4); }
+    #force-btn { background: #d29922; color: #fff; margin-top: 10px; display: none; }
+    /* 手機螢幕即時除錯日誌視窗 */
+    #debug-panel {
+      width: 100%; max-width: 320px; margin-top: 18px; background: #000;
+      border: 1px solid #30363d; border-radius: 8px; padding: 10px;
+      font-family: monospace; font-size: 0.72rem; text-align: left;
+      max-height: 180px; overflow-y: auto; color: #3fb950;
+    .log-err { color: #f85149; font-weight: bold; }
+    .log-warn { color: #d29922; }
+    .log-info { color: #58a6ff; }
+    /* AR 說明文字浮動面板 */
+    #ui-container {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      width: 90%; max-width: 480px; z-index: 1000; pointer-events: none;
     #info-card {
-      position: absolute;
-      bottom: 24px;
-      left: 5%;
-      width: 90%;
-      background: rgba(18, 24, 38, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      color: #ffffff;
-      padding: 16px 20px;
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-      display: none; /* 啟動相機後才顯示 */
-    #info-text {
-      font-size: 15px;
-      line-height: 1.6;
-      letter-spacing: 0.5px;
-      color: #e2e8f0;
-      text-align: justify;
-    /* 啟動遮罩頁面 (解決 iOS / Android 用戶手勢授權限制) */
-    #start-screen {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 24px;
-      text-align: center;
-      pointer-events: auto; /* 允許點擊按鈕 */
-      z-index: 100000;
-    #start-btn {
-      margin-top: 24px;
-      padding: 16px 36px;
-      font-size: 17px;
-      font-weight: 600;
-      color: #ffffff;
-      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-      border: none;
-      border-radius: 50px;
-      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
-      cursor: pointer;
-      transition: transform 0.1s ease;
-    #start-btn:active {
-      transform: scale(0.96);
-    #start-btn:disabled {
-      background: #475569;
-      box-shadow: none;
-      cursor: not-allowed;
-    /* 即時錯誤提示懸浮列 (除錯利器) */
-    #debug-banner {
-      position: absolute;
-      top: 15px;
-      left: 5%;
-      width: 90%;
-      padding: 12px 16px;
-      background: rgba(220, 38, 38, 0.9);
-      color: #ffffff;
-      font-size: 13px;
-      border-radius: 8px;
-      display: none;
-      z-index: 100001;
-      pointer-events: auto;
-      word-break: break-all;
+      background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 14px;
+      padding: 16px 20px; color: #f8fafc; font-size: 0.95rem; line-height: 1.5;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); text-align: center;
+      transition: all 0.25s ease;
   </style>
+  <!-- 全域錯誤攔截腳本（必須放在最前） -->
+  <script>
+    function logToScreen(msg, type = 'log') {
+      const panel = document.getElementById('debug-log');
+      if (panel) {
+        const item = document.createElement('div');
+        if (type === 'error') item.className = 'log-err';
+        else if (type === 'warn') item.className = 'log-warn';
+        else if (type === 'info') item.className = 'log-info';
+        item.textContent = `> ${msg}`;
+        panel.appendChild(item);
+        panel.scrollTop = panel.scrollHeight;
+    // 攔截 JS 報錯
+    window.addEventListener('error', (e) => {
+      logToScreen(`[JS錯誤] ${e.message} (${e.filename ? e.filename.split('/').pop() : ''}:${e.lineno})`, 'error');
+    // 攔截 Promise 異常（如 Fetch / Wasm 載入失敗）
+    window.addEventListener('unhandledrejection', (e) => {
+      logToScreen(`[非同步異常] ${e.reason}`, 'error');
+  </script>
 </head>
 <body>
-  <!-- UI 層 -->
-  <div id="ui-container">
-    <!-- 錯誤除錯條 -->
-    <div id="debug-banner"></div>
-    <!-- 啟動引導畫面 -->
-    <div id="start-screen">
-      <h2 style="color: #60a5fa; font-size: 24px; margin-bottom: 8px;">電腦硬件 AR 體驗</h2>
-      <p style="color: #94a3b8; font-size: 14px; max-width: 280px; line-height: 1.5;">
-        歡迎參觀學校開放日！點擊下方按鈕以允許相機存取，隨後掃描展板上的硬件圖案。
-      </p>
-      <button id="start-btn">正在載入 AR 核心模組...</button>
-    </div>
-    <!-- 識別結果卡片 -->
-    <div id="info-card">
-      <div id="info-text">✨ 請將相機對準展板上的硬件圖片...</div>
+  <!-- 1. 啟動與除錯面板 -->
+  <div id="start-overlay">
+    <h1>電腦硬件 AR 導覽</h1>
+    <p>正在檢查資源與環境...</p>
+    <button id="start-btn" class="btn" disabled>正在載入資源...</button>
+    <button id="force-btn" class="btn" onclick="forceStartAR()">⚠️ 資源逾時：點此強制開啟相機</button>
+    <!-- 終端機除錯日誌 -->
+    <div id="debug-panel">
+      <div style="color: #8b949e; border-bottom: 1px solid #21262d; margin-bottom: 4px; padding-bottom: 2px;">診斷日誌 (Diagnostic Log):</div>
+      <div id="debug-log"></div>
     </div>
   </div>
-    A-Frame 場景
-    autoStart: false - 嚴格由按鈕觸發，符合 iOS Safari 規範
+  <!-- 2. AR 文字卡片 UI -->
+  <div id="ui-container">
+    <div id="info-card">✨ 請將相機對準展板上的硬件圖片...</div>
+  </div>
+  <!-- 3. A-Frame 場景 (加入 timeout 保護避免死鎖) -->
   <a-scene 
-    mindar-image="imageTargetSrc: ./targets.mind; autoStart: false; filterMinCF: 0.0001; filterBeta: 0.001;" 
-    color-space="sRGB" 
-    renderer="colorManagement: true, physicallyCorrectLights: true" 
-    vr-mode-ui="enabled: false" 
+    mindar-image="imageTargetSrc: targets.mind; autoStart: false; filterMinCF: 0.001; filterBeta: 1000;"
+    embedded
+    color-space="sRGB"
+    renderer="colorManagement: true, physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false">
-    <a-assets>
+    <a-assets id="assets-mgr" timeout="10000">
       <a-asset-item id="cpuModel" src="cpu.glb"></a-asset-item>
       <a-asset-item id="gpuModel" src="gpu.glb"></a-asset-item>
       <a-asset-item id="psuModel" src="psu.glb"></a-asset-item>
       <a-asset-item id="hddModel" src="hdd.glb"></a-asset-item>
       <a-asset-item id="ssdModel" src="ssd.glb"></a-asset-item>
       <a-asset-item id="ramModel" src="ram.glb"></a-asset-item>
-      <a-asset-item id="mbModel" src="motherboard.glb"></a-asset-item>
+      <a-asset-item id="motherboardModel" src="motherboard.glb"></a-asset-item>
     </a-assets>
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <!-- 0: CPU -->
-    <a-entity mindar-image-target="targetIndex: 0" id="target-cpu">
-      <a-gltf-model src="#cpuModel" position="0 0 0.1" scale="0.4 0.4 0.4" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
-    <!-- 1: GPU -->
-    <a-entity mindar-image-target="targetIndex: 1" id="target-gpu">
-      <a-gltf-model src="#gpuModel" position="0 0 0.1" scale="0.3 0.3 0.3" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
-    <!-- 2: PSU -->
-    <a-entity mindar-image-target="targetIndex: 2" id="target-psu">
-      <a-gltf-model src="#psuModel" position="0 0 0.1" scale="0.35 0.35 0.35" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
-    <!-- 3: HDD -->
-    <a-entity mindar-image-target="targetIndex: 3" id="target-hdd">
-      <a-gltf-model src="#hddModel" position="0 0 0.1" scale="0.35 0.35 0.35" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
-    <!-- 4: SSD (帶動畫循環播放) -->
-    <a-entity mindar-image-target="targetIndex: 4" id="target-ssd">
-      <a-gltf-model src="#ssdModel" position="0 0 0.1" scale="0.35 0.35 0.35" rotation="90 0 0" animation-mixer></a-gltf-model>
-    </a-entity>
-    <!-- 5: RAM -->
-    <a-entity mindar-image-target="targetIndex: 5" id="target-ram">
-      <a-gltf-model src="#ramModel" position="0 0 0.1" scale="0.35 0.35 0.35" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
-    <!-- 6: Motherboard -->
-    <a-entity mindar-image-target="targetIndex: 6" id="target-mb">
-      <a-gltf-model src="#mbModel" position="0 0 0.1" scale="0.25 0.25 0.25" rotation="90 0 0"></a-gltf-model>
-    </a-entity>
+    <!-- 7 個硬件目標點 -->
+    <a-entity mindar-image-target="targetIndex: 0"><a-gltf-model src="#cpuModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 1"><a-gltf-model src="#gpuModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 2"><a-gltf-model src="#psuModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 3"><a-gltf-model src="#hddModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 4"><a-gltf-model src="#ssdModel" scale="0.1 0.1 0.1" animation-mixer></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 5"><a-gltf-model src="#ramModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
+    <a-entity mindar-image-target="targetIndex: 6"><a-gltf-model src="#motherboardModel" scale="0.1 0.1 0.1"></a-gltf-model></a-entity>
   </a-scene>
   <script>
-    const debugBanner = document.getElementById('debug-banner');
-    const startBtn = document.getElementById('start-btn');
-    const startScreen = document.getElementById('start-screen');
-    const infoCard = document.getElementById('info-card');
-    const infoText = document.getElementById('info-text');
     const sceneEl = document.querySelector('a-scene');
-    function showError(msg) {
-      debugBanner.style.display = 'block';
-      debugBanner.innerHTML = `<strong>⚠️ 啟動失敗：</strong><br>${msg}`;
-      console.error(msg);
-    // 1. 環境安全性檢測 (HTTPS / Localhost 驗證)
-    const isSecure = window.location.protocol === 'https:' || 
-                     window.location.hostname === 'localhost' || 
-                     window.location.hostname === '127.0.0.1';
-    if (!isSecure) {
-      showError('瀏覽器安全性限制：WebAR 必須在 <b>HTTPS</b> 環境下運行！<br>請勿直接用手機開啟 http:// 開頭的網址或 file:// 本地檔案。');
-      startBtn.disabled = true;
-      startBtn.innerText = '環境不支援 (需 HTTPS)';
-    // 2. 硬件文字對照字典
-    const hardwareTexts = {
-      'target-cpu': '【中央處理器 (CPU)】電腦的大腦，負責執行程式指令與運算所有核心數據。',
-      'target-gpu': '【顯示卡 (GPU)】圖形運算核心，負責渲染精美畫面、3D 遊戲及加速 AI 運算。',
-      'target-psu': '【電源供應器 (PSU)】電腦的心臟，將家用交流電轉換為穩定的直流電，供電給全機運作。',
-      'target-hdd': '【傳統硬碟 (HDD)】高容量儲存裝置，利用磁性盤片記錄數據，適合儲存大量非即時讀取的檔案。',
-      'target-ssd': '【固態硬碟 (SSD)】高速儲存裝置，採用快閃記憶體技術，能秒速啟動系統與載入遊戲。',
-      'target-ram': '【隨機存取記憶體 (RAM)】臨時工作台，暫存 CPU 運算中的數據，容量越大越能流暢進行多任務切換。',
-      'target-mb':  '【主機板 (Motherboard)】電腦的骨幹與橋樑，佈滿精密電路，負責連接並協調所有硬件運作。'
-    const defaultHint = '✨ 請將相機對準展板上的硬件圖片...';
-    // 3. 等待 A-Frame 場景完全加載完畢後，才啟用按鈕
-    sceneEl.addEventListener('loaded', () => {
-      if (isSecure) {
+    const startBtn = document.getElementById('start-btn');
+    const forceBtn = document.getElementById('force-btn');
+    const infoCard = document.getElementById('info-card');
+    const defaultText = "✨ 請將相機對準展板上的硬件圖片...";
+    logToScreen("DOM 已加載，初始化中...", "info");
+    // 檢查 HTTPS
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+      logToScreen("警告: 非 HTTPS 環境可能無法使用相機！", "error");
+    // 檢查 targets.mind 是否存在 (GitHub Pages 404 檢查)
+    fetch('targets.mind', { method: 'HEAD' })
+      .then(res => {
+        if (res.ok) {
+          logToScreen("targets.mind 找到 (200 OK)", "info");
+        } else {
+          logToScreen(`targets.mind 讀取失敗! HTTP ${res.status}`, "error");
+      .catch(err => logToScreen(`targets.mind 請求異常: ${err.message}`, "error"));
+    // 解鎖按鈕
+    function activateButton() {
+      if (startBtn.disabled) {
         startBtn.disabled = false;
-        startBtn.innerText = '開啟 AR 相機體驗';
-    // 4. 按鈕點擊事件：啟動相機與追蹤系統
-    startBtn.addEventListener('click', async () => {
+        startBtn.classList.add('ready');
+        startBtn.innerText = '開啟相機 探索硬件';
+        logToScreen("所有核心與資源就緒！", "info");
+    // 監聽 A-Frame Assets 載入情況
+    const assetsMgr = document.getElementById('assets-mgr');
+    assetsMgr.addEventListener('loaded', () => {
+      logToScreen("3D 模型資源庫 (<a-assets>) 全部載入完畢");
+      activateButton();
+    assetsMgr.addEventListener('timeout', () => {
+      logToScreen("模型載入逾時 (可能有檔案名稱大小寫錯誤或過大)", "warn");
+      forceBtn.style.display = 'block'; // 顯示強制按鈕
+      activateButton();
+    // 場景加載完成事件
+    if (sceneEl.hasLoaded) {
+      logToScreen("Scene 已經 ready");
+      activateButton();
+    } else {
+      sceneEl.addEventListener('loaded', () => {
+        logToScreen("Scene 事件觸發: loaded");
+        activateButton();
+    // 5 秒超時保險機制：如果一直卡住，強制解鎖並顯示強制按鈕
+    setTimeout(() => {
+      if (startBtn.disabled) {
+        logToScreen("載入超過 5 秒，已啟用備用解鎖", "warn");
+        forceBtn.style.display = 'block';
+        activateButton();
+    }, 5000);
+    // 啟動 AR
+    async function startAR() {
+      logToScreen("正在請求相機權限...", "info");
+      startBtn.innerText = "正在啟動鏡頭...";
       startBtn.disabled = true;
-      startBtn.innerText = '正在啟動相機...';
       try {
-        // 先測試相機 API 是否可用
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error('此瀏覽器不支援 getUserMedia 相機存取，請更換 Safari (iOS) 或 Chrome (Android)。');
-        // 取得 MindAR 核心系統
         const arSystem = sceneEl.systems['mindar-image-system'];
         if (!arSystem) {
-          throw new Error('無法找到 mindar-image-system，請確認 MindAR 腳本是否正確載入或 targets.mind 是否存在。');
-        // 正式啟動相機與 AR 追蹤
+          throw new Error("找不到 mindar-image-system，請確認 MindAR 庫是否正確加載");
         await arSystem.start();
-        // 啟動成功：隱藏開始頁，顯示底端資訊列
-        startScreen.style.display = 'none';
-        infoCard.style.display = 'block';
+        logToScreen("相機已啟動！", "info");
+        document.getElementById('start-overlay').style.display = 'none';
       } catch (err) {
-        showError(err.message || err);
+        logToScreen(`啟動失敗: ${err.name} - ${err.message}`, "error");
+        alert("相機啟動失敗，請確認是否允許瀏覽器相機權限: " + err.message);
         startBtn.disabled = false;
-        startBtn.innerText = '重新嘗試開啟';
-    // 5. 綁定識別目標的 targetFound 與 targetLost 事件
-    Object.keys(hardwareTexts).forEach(id => {
-      const targetEntity = document.getElementById(id);
-      if (targetEntity) {
-        targetEntity.addEventListener('targetFound', () => {
-          infoText.innerText = hardwareTexts[id];
-          infoCard.style.border = '1px solid #3b82f6';
-        targetEntity.addEventListener('targetLost', () => {
-          infoText.innerText = defaultHint;
-          infoCard.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+        startBtn.innerText = "重試啟動";
+    function forceStartAR() {
+      logToScreen("使用者觸發強制啟動...", "warn");
+      startAR();
+    startBtn.addEventListener('click', startAR);
+    // 硬件描述字典
+    const descriptions = [
+      "【中央處理器 (CPU)】電腦的大腦，負責執行程式指令與運算所有核心數據。",
+      "【顯示卡 (GPU)】圖形運算核心，負責渲染精美畫面、3D 遊戲及加速 AI 運算。",
+      "【電源供應器 (PSU)】電腦的心臟，將家用交流電轉換為穩定的直流電，供電給全機運作。",
+      "【傳統硬碟 (HDD)】高容量儲存裝置，利用磁性盤片記錄數據，適合儲存大量非即時讀取的檔案。",
+      "【固態硬碟 (SSD)】高速儲存裝置，採用快閃記憶體技術，能秒速啟動系統與載入遊戲。",
+      "【隨機存取記憶體 (RAM)】臨時工作台，暫存 CPU 運算中的數據，容量越大越能流暢進行多任務切換。",
+      "【主機板 (Motherboard)】電腦的骨幹與橋樑，佈滿精密電路，負責連接並協調所有硬件運作。"
+    // 綁定辨識事件
+    const targets = document.querySelectorAll('[mindar-image-target]');
+    targets.forEach((targetEl) => {
+      targetEl.addEventListener('targetFound', () => {
+        const index = parseInt(targetEl.getAttribute('mindar-image-target').match(/\d+/)[0], 10);
+        infoCard.innerText = descriptions[index];
+        infoCard.style.borderColor = "rgba(56, 189, 248, 0.6)";
+      targetEl.addEventListener('targetLost', () => {
+        infoCard.innerText = defaultText;
+        infoCard.style.borderColor = "rgba(255, 255, 255, 0.15)";
   </script>
 </body>
 </html>
